@@ -13,6 +13,19 @@ TABLE_NAME_2 = 'książki'
 
 # -- Połączenie z bazą danych --
 def connect_db():
+    """
+    Łączy się z bazą PostgreSQL, używając danych uwierzytelniających z pliku JSON.
+
+    Funkcja odczytuje dane połączenia z pliku `database_creds.json`, który powinien zawierać:
+    - `host_name`
+    - `user_name`
+    - `db_name`
+    - `password`
+    - `port_number`
+
+    :return: Obiekt połączenia z bazą danych.
+    :rtype: psycopg.Connection
+    """
     if DB_TYPE == 'sqlite':
         return sqlite3.connect("/home/student04/Lab8)")
     elif DB_TYPE == 'postgres':
@@ -28,6 +41,21 @@ def connect_db():
 
 # -- Tworzenie tabel --
 def setup_schema_and_data(conn):
+    """
+    Tworzy schemat bazy danych zawierający tabele `użytkownicy` i `książki`, jeśli jeszcze nie istnieją.
+
+    Funkcja:
+    - Tworzy tabelę `użytkownicy` z informacjami o użytkownikach biblioteki, w tym PESEL jako klucz główny.
+    - Tworzy tabelę `książki` z informacjami o książkach oraz powiązaniem z użytkownikiem przez klucz obcy `pesel`.
+    - Ustawia ograniczenia integralności (np. zakresy wartości, relacje między tabelami).
+    - Zatwierdza zmiany w bazie danych po każdej operacji `CREATE TABLE`.
+
+    :param conn: Obiekt połączenia z bazą danych.
+    :type conn: psycopg.Connection
+
+    :return: None
+    :rtype: None
+    """
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS użytkownicy (
@@ -53,6 +81,31 @@ def setup_schema_and_data(conn):
     conn.commit()
 # -- Wczytywanie danych do tabeli użytkownicy z pliku csv --   
 def load_users_from_csv(conn, csv_path):
+    """
+    Wczytuje dane użytkowników z pliku CSV i zapisuje je do tabeli `użytkownicy` w bazie danych.
+
+    Funkcja:
+    - Otwiera plik CSV zakodowany w UTF-8 i rozdzielany średnikami (`;`).
+    - Odczytuje dane jako słowniki (`DictReader`).
+    - Dla każdego wiersza próbuje wstawić dane do tabeli `użytkownicy`.
+    - Obsługuje błędy wstawiania i wypisuje komunikaty o niepowodzeniu.
+
+    Oczekiwane nagłówki w pliku CSV:
+    - `imię`
+    - `nazwisko`
+    - `adres zamieszkania`
+    - `PESEL`
+    - `adres mail`
+    - `liczba wypożyczonych książek`
+
+    :param conn: Obiekt połączenia z bazą danych.
+    :type conn: psycopg.Connection
+    :param csv_path: Ścieżka do pliku CSV z danymi użytkowników.
+    :type csv_path: str
+
+    :return: None
+    :rtype: None
+    """
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=';')
         cursor = conn.cursor()
@@ -75,6 +128,31 @@ def load_users_from_csv(conn, csv_path):
 
 # -- Wczytywanie danych do tabeli książki z pliku csv --
 def load_books_from_csv(conn, csv_path):
+    """
+    Wczytuje dane książek z pliku CSV i zapisuje je do tabeli `książki` w bazie danych PostgreSQL.
+
+    Funkcja:
+    - Otwiera plik CSV zakodowany w UTF-8 i rozdzielany średnikami (`;`).
+    - Odczytuje dane jako słowniki (`DictReader`).
+    - Dla każdego wiersza wykonuje zapytanie `INSERT INTO`, aby dodać dane do tabeli `książki`.
+    - Wartość pola `pesel` (czyli kto wypożyczył książkę) może być pusta — w takim przypadku zapisywana jest jako `NULL`.
+    - Obsługuje błędy wstawiania i wypisuje komunikaty o niepowodzeniu.
+
+    Oczekiwane nagłówki w pliku CSV:
+    - `nazwa ksiązki`
+    - `autor`
+    - `indeks`
+    - `przez kogo wypożyczona`
+    - `czas wypożyczenia`
+
+    :param conn: Obiekt połączenia z bazą danych PostgreSQL.
+    :type conn: psycopg.Connection
+    :param csv_path: Ścieżka do pliku CSV z danymi książek.
+    :type csv_path: str
+
+    :return: None
+    :rtype: None
+    """
     with open(csv_path, newline='', encoding='utf-8') as csvfile:
         reader = csv.DictReader(csvfile, delimiter=';')
         cursor = conn.cursor()
@@ -98,12 +176,41 @@ def load_books_from_csv(conn, csv_path):
 # -- Kopia zapasowa dla PostgreSQL --
 
 def backup_database(conn):
+    """
+    Tworzy kopię zapasową bazy danych PostgreSQL przy użyciu narzędzia `pg_dump`.
+
+    Funkcja:
+    - Sprawdza, czy typ bazy danych to PostgreSQL (`DB_TYPE == 'postgres'`).
+    - Wykonuje polecenie systemowe `pg_dump`, aby utworzyć plik `student04db_backup.sql` zawierający zrzut bazy danych `student04db`.
+
+    :param conn: Obiekt połączenia z bazą danych PostgreSQL (niewykorzystywany bezpośrednio w tej funkcji).
+    :type conn: psycopg.Connection
+
+    :return: None
+    :rtype: None
+    """
     if DB_TYPE == 'postgres':
         !pg_dump -d student04db > student04db_backup.sql 
 
 
 # -- Czyszczenie bazy --
 def clear_tables(conn, tables):
+    """
+    Usuwa wskazane tabele z bazy danych PostgreSQL, jeśli istnieją.
+
+    Funkcja:
+    - Iteruje po liście nazw tabel.
+    - Dla każdej z nich wykonuje zapytanie `DROP TABLE IF EXISTS`, aby usunąć tabelę, jeśli istnieje.
+    - Zatwierdza zmiany w bazie danych po zakończeniu operacji.
+
+    :param conn: Obiekt połączenia z bazą danych PostgreSQL.
+    :type conn: psycopg.Connection
+    :param tables: Lista nazw tabel do usunięcia.
+    :type tables: list[str]
+
+    :return: None
+    :rtype: None
+    """
     cursor = conn.cursor()
     for table in tables:
         cursor.execute(f'DROP TABLE IF EXISTS {table}')
